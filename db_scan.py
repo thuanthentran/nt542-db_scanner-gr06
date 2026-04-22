@@ -6,7 +6,7 @@ def scan_mariadb_port():
     # Hãy thay đổi 'MẬT_KHẨU_BẠN_ĐÃ_ĐẶT' bằng mật khẩu root bạn vừa cài
     config = {
         'user': 'root',
-        'password': 'Thu4n@th3n',
+        'password': 'mat_khau_ban_da_dat',
         'host': '127.0.0.1',
         'port': 3306
     }
