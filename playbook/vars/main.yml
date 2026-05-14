@@ -1,0 +1,43 @@
+---
+# Biến chung cho tất cả môi trường
+project_name: db_scanner
+project_version: "1.0"
+app_user: dbscanner
+app_group: dbscanner
+app_home: /opt/db_scanner
+source_path: "/home/{{ app_user }}/db_scanner"  
+
+# Cấu hình Python
+python_version: "3.10"
+venv_path: "{{ app_home }}/venv"
+requirements_file: "{{ app_home }}/requirements.txt"
+
+# Cấu hình logging
+log_dir: "/var/log/db_scanner"
+log_level: "INFO"
+
+# Cấu hình audit
+audit_schedule: "0 2 * * *"  
+audit_timeout: 3600  
+
+# Cấu hình remediation
+remediation_enabled: false  
+remediation_backup: true  
+backup_dir: "/var/backups/db_scanner"
+
+# Cấu hình báo cáo
+report_dir: "/var/reports/db_scanner"
+report_format: "json,html,csv" 
+report_retention_days: 90
+
+# Cấu hình email
+send_report_email: true
+email_recipients:
+  - "admin@company.com"
+  - "dba@company.com"
+smtp_server: "smtp.company.com"
+smtp_port: 587
+
+# Cấu hình database
+db_connection_timeout: 30
+db_query_timeout: 300

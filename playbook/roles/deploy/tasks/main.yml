@@ -1,0 +1,89 @@
+---
+# Tasks triển khai ứng dụng
+- name: "Copy scanner application from control node"
+  copy:
+    src: "{{ source_path }}/"
+    dest: "{{ app_home }}/src"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+  register: copy_result
+
+- name: "Create Python virtual environment"
+  command:
+    cmd: "python3 -m venv {{ venv_path }}"
+    creates: "{{ venv_path }}/bin/activate"
+  become_user: "{{ app_user }}"
+
+- name: "Upgrade pip in virtualenv"
+  pip:
+    name:
+      - pip
+      - setuptools
+      - wheel
+    state: latest
+    virtualenv: "{{ venv_path }}"
+  become_user: "{{ app_user }}"
+
+- name: "Install Python dependencies"
+  pip:
+    requirements: "{{ app_home }}/src/requirements.txt"
+    virtualenv: "{{ venv_path }}"
+    state: present
+  become_user: "{{ app_user }}"
+  register: pip_result
+
+- name: "Copy main scanner script"
+  copy:
+    src: "{{ app_home }}/src/db_scan.py"
+    dest: "{{ app_home }}/db_scan.py"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+  when: copy_result.changed or not db_scan_script_exists
+
+- name: "Copy scanner modules"
+  copy:
+    src: "{{ app_home }}/src/scanner/"
+    dest: "{{ app_home }}/scanner/"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+  when: copy_result.changed
+
+- name: "Create configuration file"
+  template:
+    src: db_scanner_config.j2
+    dest: "{{ app_home }}/config.ini"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0600'
+  vars:
+    db_server: "{{ inventory_hostname }}"
+    db_instance: "{{ db_instance | default('SQLEXPRESS') }}"
+
+- name: "Create wrapper script"
+  template:
+    src: run_scanner.sh.j2
+    dest: "{{ app_home }}/run_scanner.sh"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+
+- name: "Verify deployment"
+  command:
+    cmd: "{{ venv_path }}/bin/python3 -m py_compile {{ app_home }}/db_scan.py"
+  become_user: "{{ app_user }}"
+  changed_when: false
+
+- name: "Set deployment status"
+  set_fact:
+    deployment_status: "SUCCESS"
+  when: pip_result.changed or git_result.changed
+
+- name: "Display deployment info"
+  debug:
+    msg:
+      - "Application deployed to: {{ app_home }}"
+      - "Python version: {{ ansible_python_version }}"
+      - "Virtual environment: {{ venv_path }}"

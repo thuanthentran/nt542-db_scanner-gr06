@@ -1,0 +1,30 @@
+[Database]
+SERVER={{ db_server }}
+INSTANCE={{ db_instance }}
+PORT=1433
+DATABASE=master
+TIMEOUT={{ db_connection_timeout }}
+QUERY_TIMEOUT={{ db_query_timeout }}
+
+[Logging]
+LOG_DIR={{ log_dir }}
+LOG_LEVEL={{ log_level }}
+LOG_FORMAT=json
+
+[Audit]
+ENABLED=true
+SCHEDULE={{ audit_schedule }}
+REPORT_FORMAT={{ report_format }}
+RETENTION_DAYS={{ report_retention_days }}
+
+[Remediation]
+ENABLED={{ remediation_enabled }}
+BACKUP_BEFORE_CHANGE={{ remediation_backup }}
+BACKUP_DIR={{ backup_dir }}
+
+[Reporting]
+REPORT_DIR={{ report_dir }}
+SEND_EMAIL={{ send_report_email }}
+SMTP_SERVER={{ smtp_server }}
+SMTP_PORT={{ smtp_port }}
+EMAIL_RECIPIENTS={{ email_recipients | join(';') }}

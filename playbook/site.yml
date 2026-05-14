@@ -1,0 +1,41 @@
+---
+# Playbook chính để triển khai và quản lý DB Scanner
+# Sử dụng: ansible-playbook playbook/site.yml -i inventory/hosts.ini
+
+- name: "Deploy DB Scanner - Audit and Remediation"
+  hosts: db_servers
+  remote_user: "{{ ansible_user | default('ansible') }}"
+  become: yes
+  become_method: sudo
+  
+  vars_files:
+    - "vars/main.yml"
+    - "vars/{{ environment | default('dev') }}.yml"
+  
+  pre_tasks:
+    - name: "Collect OS facts"
+      setup:
+        gather_subset: all
+
+    - name: "Verify target hosts are reachable"
+      ping:
+
+  roles:
+    - role: common
+      tags: ['always']
+    - role: deploy
+      tags: ['deploy']
+    - role: audit
+      tags: ['audit']
+    - role: remediation
+      tags: ['remediation']
+    - role: reporting
+      tags: ['reporting']
+
+  post_tasks:
+    - name: "Display summary"
+      debug:
+        msg:
+          - "Deployment Status: {{ deployment_status | default('completed') }}"
+          - "Audit Results: {{ audit_results_path | default('N/A') }}"
+          - "Remediation Report: {{ remediation_report_path | default('N/A') }}"

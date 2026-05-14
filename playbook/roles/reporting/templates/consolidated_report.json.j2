@@ -1,0 +1,25 @@
+{
+  "report_metadata": {
+    "generated": "{{ report_timestamp }}",
+    "total_servers": {{ total_servers }},
+    "servers_audited": {{ servers_audited | length }},
+    "environment": "{{ environment | default('production') }}"
+  },
+  "audit_results": [
+    {% for server in servers_audited %}
+    {
+      "server": "{{ server }}",
+      "status": "{{ hostvars[server].audit_status | default('UNKNOWN') }}",
+      "timestamp": "{{ hostvars[server].audit_summary.timestamp | default('N/A') }}",
+      "findings": {{ hostvars[server].audit_summary.findings | default('0') }},
+      "results_path": "{{ hostvars[server].audit_summary.results_path | default('N/A') }}",
+      "archive": "{{ hostvars[server].audit_summary.archive_path | default('N/A') }}"
+    }{{ "," if not loop.last else "" }}
+    {% endfor %}
+  ],
+  "summary": {
+    "total_findings": {{ audit_summaries | map(attribute='findings') | sum }},
+    "successful_audits": {{ servers_audited | length }},
+    "report_location": "{{ report_path }}"
+  }
+}

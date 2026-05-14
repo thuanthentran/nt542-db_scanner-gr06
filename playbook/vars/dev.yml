@@ -1,0 +1,15 @@
+---
+# Biến cụ thể cho môi trường DEV
+environment: dev
+remediation_enabled: true  # Cho phép remediation trong DEV
+audit_schedule: "0 3 * * *"  # Chạy 3h sáng
+log_level: "DEBUG"
+send_report_email: false
+
+db_hosts:
+  - host: localhost
+    port: 1433
+    instance: "SQLEXPRESS01"
+    credentials_vault: "vault_dev_db_user"
+
+monitoring_enabled: false

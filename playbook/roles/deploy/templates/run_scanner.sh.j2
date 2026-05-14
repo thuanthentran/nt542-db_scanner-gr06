@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# Wrapper script để chạy DB Scanner
+# Usage: ./run_scanner.sh [audit|remediate|report]
+
+set -e
+
+APP_HOME="{{ app_home }}"
+VENV="{{ venv_path }}"
+LOG_DIR="{{ log_dir }}"
+SCRIPT_NAME=$(basename "$0")
+
+# Logging function
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_DIR}/scanner.log"
+}
+
+# Activate virtual environment
+source "${VENV}/bin/activate"
+
+log "Starting DB Scanner"
+log "Python: $(which python3)"
+log "Mode: ${1:-full}"
+
+# Parse command line arguments
+MODE=${1:-full}
+
+case "$MODE" in
+    audit)
+        log "Running audit only..."
+        python3 "${APP_HOME}/db_scan.py" \
+            --output-dir "${LOG_DIR}" \
+            --format json,html,csv \
+            --timeout {{ audit_timeout }} \
+            --log-level {{ log_level }}
+        ;;
+    remediate)
+        log "Running remediation..."
+        if [ "{{ remediation_enabled }}" != "true" ]; then
+            log "ERROR: Remediation is disabled"
+            exit 1
+        fi
+        python3 << 'EOF'
+# Remediation script
+print("Remediation mode - implement your logic here")
+EOF
+        ;;
+    report)
+        log "Generating reports..."
+        python3 << 'EOF'
+# Report generation
+print("Report generation - implement your logic here")
+EOF
+        ;;
+    full|*)
+        log "Running full scan (audit + remediation + reporting)..."
+        python3 "${APP_HOME}/db_scan.py" \
+            --output-dir "${LOG_DIR}" \
+            --format json,html,csv \
+            --full-scan \
+            --timeout {{ audit_timeout }}
+        ;;
+esac
+
+EXIT_CODE=$?
+log "Completed with exit code: $EXIT_CODE"
+
+deactivate
+exit $EXIT_CODE

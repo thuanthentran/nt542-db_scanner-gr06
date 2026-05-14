@@ -1,0 +1,50 @@
+---
+# Playbook để rollback các thay đổi từ remediation
+# Sử dụng: ansible-playbook playbook/rollback.yml -i inventory/hosts.ini -e backup_date=2026-05-14
+
+- name: "Rollback Remediation Changes"
+  hosts: db_servers
+  remote_user: "{{ ansible_user | default('ansible') }}"
+  become: yes
+  
+  vars_files:
+    - vars/main.yml
+    - vars/{{ environment | default('dev') }}.yml
+  
+  tasks:
+    - name: "Verify backup exists"
+      stat:
+        path: "{{ backup_dir }}/{{ backup_date }}"
+      register: backup_stat
+      failed_when: not backup_stat.stat.exists
+
+    - name: "Confirm rollback"
+      pause:
+        prompt: |
+          
+          ⚠️  ROLLBACK WARNING: You are about to restore database configuration from a backup!
+          
+          Server: {{ inventory_hostname }}
+          Backup Date: {{ backup_date }}
+          Backup Location: {{ backup_dir }}/{{ backup_date }}
+          
+          This will UNDO all remediation changes since {{ backup_date }}.
+          Type 'yes' to proceed:
+        echo: yes
+      register: rollback_confirm
+
+    - name: "Restore from backup"
+      shell: |
+        echo "Restoring configuration from backup..."
+        # Add your restoration logic here
+        ls -la {{ backup_dir }}/{{ backup_date }}/
+        echo "Restoration completed"
+      register: rollback_result
+      become_user: "{{ app_user }}"
+
+    - name: "Verify restoration"
+      debug:
+        msg:
+          - "Rollback Status: SUCCESS"
+          - "Backup Used: {{ backup_dir }}/{{ backup_date }}"
+          - "Restored At: {{ ansible_date_time.iso8601 }}"

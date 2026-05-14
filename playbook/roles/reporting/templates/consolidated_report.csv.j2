@@ -1,0 +1,4 @@
+Server,Status,Timestamp,Findings,Results_Path
+{% for server in servers_audited %}
+"{{ server }}","{{ hostvars[server].audit_status | default('UNKNOWN') }}","{{ hostvars[server].audit_summary.timestamp | default('N/A') }}","{{ hostvars[server].audit_summary.findings | default('0') }}","{{ hostvars[server].audit_summary.results_path | default('N/A') }}"
+{% endfor %}

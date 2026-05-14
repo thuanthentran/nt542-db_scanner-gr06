@@ -1,0 +1,15 @@
+# Requirements cho Ansible Galaxy Collections
+
+---
+collections:
+  # Core collections
+  - name: community.general
+    version: ">=5.0.0"
+  
+  # Windows support (nếu có SQL Server trên Windows)
+  - name: ansible.windows
+    version: ">=1.0.0"
+  
+  # Network (optional)
+  - name: community.network
+    version: ">=3.0.0"

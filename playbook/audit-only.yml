@@ -1,0 +1,26 @@
+---
+# Playbook riêng để chỉ chạy audit (không remediate)
+# Sử dụng: ansible-playbook playbook/audit-only.yml -i inventory/hosts.ini
+
+- name: "Run Audit Only - No Remediation"
+  hosts: db_servers
+  remote_user: "{{ ansible_user | default('ansible') }}"
+  become: yes
+  
+  vars_files:
+    - vars/main.yml
+    - vars/{{ environment | default('prod') }}.yml
+  
+  roles:
+    - role: common
+      tags: ['always']
+    - role: deploy
+      tags: ['deploy']
+    - role: audit
+      tags: ['audit']
+    - role: reporting
+      tags: ['reporting']
+  
+  tags:
+    - audit
+    - never

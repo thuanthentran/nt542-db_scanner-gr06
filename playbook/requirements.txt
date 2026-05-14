@@ -1,0 +1,17 @@
+# Ansible và các Collections được yêu cầu cho DB Scanner Playbook
+
+# Core Ansible
+ansible>=2.10.0
+
+# Collections
+ansible-core>=2.12.0
+
+# Python libraries cho Ansible
+jinja2>=3.0
+pyyaml>=5.3
+netaddr
+dnspython
+
+# Optional: Cho advanced features
+netbox-client  # Nếu sử dụng NetBox inventory
+python-gitlab  # Nếu sử dụng GitLab inventory

@@ -1,0 +1,82 @@
+---
+# Tasks thực hiện audit
+- name: "Create audit working directory"
+  file:
+    path: "{{ report_dir }}/audit_{{ ansible_date_time.iso8601 | replace(':', '-') }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+  register: audit_dir
+- name: "Run full audit scan"
+  command:
+    cmd: |
+      {{ venv_path }}/bin/python3 {{ app_home }}/db_scan.py
+      --output-dir {{ audit_dir.path }}
+      --format json,html,csv
+      --timeout {{ audit_timeout }}
+      --log-level {{ log_level }}
+    creates: "{{ audit_dir.path }}/audit_results.json"
+  become_user: "{{ app_user }}"
+  environment:
+    PYTHONPATH: "{{ app_home }}"
+    DB_SERVER: "{{ inventory_hostname }}"
+    DB_INSTANCE: "{{ db_instance | default('SQLEXPRESS') }}"
+  register: audit_execution
+  timeout: "{{ audit_timeout + 60 }}"
+  ignore_errors: yes
+
+- name: "Set audit status"
+  set_fact:
+    audit_status: "{{ 'SUCCESS' if audit_execution.rc == 0 else 'FAILED' }}"
+    audit_results_path: "{{ audit_dir.path }}"
+
+- name: "Parse audit results"
+  stat:
+    path: "{{ audit_dir.path }}/audit_results.json"
+  register: audit_results_file
+
+- name: "Read audit summary"
+  slurp:
+    src: "{{ audit_dir.path }}/audit_results.json"
+  register: audit_results_content
+  when: audit_results_file.stat.exists
+
+- name: "Display audit summary"
+  debug:
+    msg:
+      - "Audit Status: {{ audit_status }}"
+      - "Results stored at: {{ audit_dir.path }}"
+      - "Execution time: {{ audit_execution.end | default('N/A') }}"
+  when: audit_results_file.stat.exists
+
+- name: "Generate audit report"
+  template:
+    src: audit_report.html.j2
+    dest: "{{ audit_dir.path }}/audit_report.html"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0644'
+  vars:
+    audit_timestamp: "{{ ansible_date_time.iso8601 }}"
+    audit_hostname: "{{ inventory_hostname }}"
+    audit_status_info: "{{ audit_status }}"
+
+- name: "Compress audit results"
+  archive:
+    path: "{{ audit_dir.path }}"
+    dest: "{{ audit_dir.path }}.tar.gz"
+    format: gz
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+  register: audit_archive
+
+- name: "Create audit task summary"
+  set_fact:
+    audit_summary:
+      status: "{{ audit_status }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      server: "{{ inventory_hostname }}"
+      results_path: "{{ audit_dir.path }}"
+      archive_path: "{{ audit_archive.dest }}"
+      findings: "{{ (audit_results_content.content | b64decode | from_json).findings | default(0) if audit_results_file.stat.exists else 'N/A' }}"

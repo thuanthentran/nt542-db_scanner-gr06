@@ -1,0 +1,150 @@
+---
+# Tasks thu thập báo cáo từ nhiều máy
+- name: "Aggregate audit results from all servers"
+  block:
+    - name: "Create central report directory"
+      file:
+        path: "{{ report_dir }}/aggregated_{{ ansible_date_time.date }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+      register: central_report_dir
+
+    - name: "Fetch audit results from all servers"
+      fetch:
+        src: "{{ audit_results_path }}"
+        dest: "{{ central_report_dir.path }}/{{ inventory_hostname }}/"
+        flat: no
+      ignore_errors: yes
+      when: audit_results_path is defined
+
+    - name: "Fetch remediation results (if applicable)"
+      fetch:
+        src: "{{ remediation_summary.report_path }}"
+        dest: "{{ central_report_dir.path }}/remediation_{{ inventory_hostname }}/"
+        flat: no
+      ignore_errors: yes
+      when: remediation_summary is defined and remediation_summary.report_path != 'N/A'
+
+- name: "Generate consolidated report"
+  block:
+    - name: "Create consolidated report template"
+      template:
+        src: consolidated_report.html.j2
+        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.html"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+      vars:
+        report_timestamp: "{{ ansible_date_time.iso8601 }}"
+        total_servers: "{{ groups['db_servers'] | length }}"
+        servers_audited: "{{ groups['db_servers'] }}"
+        audit_summaries: "{{ hostvars | dict2items | map(attribute='value.audit_summary') | list }}"
+
+    - name: "Create CSV summary"
+      template:
+        src: consolidated_report.csv.j2
+        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.csv"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+
+    - name: "Create JSON summary"
+      template:
+        src: consolidated_report.json.j2
+        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.json"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+
+  when: audit_summary is defined
+
+- name: "Compress all reports"
+  block:
+    - name: "Archive reports"
+      archive:
+        path: "{{ central_report_dir.path }}"
+        dest: "{{ report_dir }}/reports_{{ ansible_date_time.date }}.tar.gz"
+        format: gz
+      delegate_to: localhost
+      run_once: true
+      register: report_archive
+
+    - name: "Calculate archive checksum"
+      stat:
+        path: "{{ report_archive.dest }}"
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      register: archive_checksum
+
+- name: "Send reports via email"
+  block:
+    - name: "Prepare email content"
+      template:
+        src: email_report.j2
+        dest: "/tmp/email_report_{{ ansible_date_time.iso8601 | replace(':', '-') }}.txt"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: '0600'
+      delegate_to: localhost
+      run_once: true
+      register: email_content
+      vars:
+        report_date: "{{ ansible_date_time.date }}"
+        report_path: "{{ central_report_dir.path }}"
+
+    - name: "Send email report"
+      mail:
+        host: "{{ smtp_server }}"
+        port: "{{ smtp_port }}"
+        to: "{{ email_recipients | join(',') }}"
+        subject: "DB Scanner Report - {{ ansible_date_time.date }}"
+        body: "{{ lookup('file', email_content.dest) }}"
+        subtype: html
+        attach: "{{ report_archive.dest }}"
+      delegate_to: localhost
+      run_once: true
+      when: send_report_email | bool
+
+  when: send_report_email | bool
+
+- name: "Clean up old reports"
+  block:
+    - name: "Find old reports"
+      find:
+        path: "{{ report_dir }}"
+        age: "{{ report_retention_days }}d"
+        recurse: yes
+        type: f
+      register: old_reports
+
+    - name: "Remove old reports"
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_reports.files }}"
+      when: old_reports.matched > 0
+
+    - name: "Clean empty directories"
+      shell: "find {{ report_dir }} -type d -empty -delete"
+      changed_when: false
+
+- name: "Display reporting summary"
+  debug:
+    msg:
+      - "Report Location: {{ central_report_dir.path }}"
+      - "Archive: {{ report_archive.dest | default('N/A') }}"
+      - "Archive SHA256: {{ archive_checksum.stat.checksum | default('N/A') }}"
+      - "Reports kept for: {{ report_retention_days }} days"
+      - "Email sent to: {{ email_recipients | join(', ') if send_report_email else 'N/A' }}"
+  delegate_to: localhost
+  run_once: true

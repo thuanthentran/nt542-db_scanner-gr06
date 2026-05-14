@@ -1,0 +1,22 @@
+---
+# Biến cụ thể cho môi trường PRODUCTION
+environment: production
+remediation_enabled: false  # Tắt remediation trong PROD, cần approval manual
+audit_schedule: "0 2 * * *"  # Chạy 2h sáng
+log_level: "INFO"
+send_report_email: true
+report_retention_days: 180
+
+db_hosts:
+  - host: db-prod-01.company.com
+    port: 1433
+    instance: "MSSQL2019"
+    credentials_vault: "vault_prod_db_user"
+  - host: db-prod-02.company.com
+    port: 1433
+    instance: "MSSQL2019"
+    credentials_vault: "vault_prod_db_user"
+
+monitoring_enabled: true
+alerting_enabled: true
+slack_webhook: "{{ vault_slack_webhook }}"
