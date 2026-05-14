@@ -4,11 +4,8 @@
   block:
     - name: "Create central report directory"
       file:
-        path: "{{ report_dir }}/aggregated_{{ ansible_date_time.date }}"
+        path: "{{ report_dir }}\\aggregated_{{ ansible_date_time.date }}"
         state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0755'
       delegate_to: localhost
       run_once: true
       register: central_report_dir
@@ -34,10 +31,7 @@
     - name: "Create consolidated report template"
       template:
         src: consolidated_report.html.j2
-        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.html"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
+        dest: "{{ central_report_dir.path }}\\CONSOLIDATED_REPORT.html"
       delegate_to: localhost
       run_once: true
       vars:
@@ -49,20 +43,14 @@
     - name: "Create CSV summary"
       template:
         src: consolidated_report.csv.j2
-        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.csv"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
+        dest: "{{ central_report_dir.path }}\\CONSOLIDATED_REPORT.csv"
       delegate_to: localhost
       run_once: true
 
     - name: "Create JSON summary"
       template:
         src: consolidated_report.json.j2
-        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.json"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0644'
+        dest: "{{ central_report_dir.path }}\\CONSOLIDATED_REPORT.json"
       delegate_to: localhost
       run_once: true
 
@@ -73,8 +61,8 @@
     - name: "Archive reports"
       archive:
         path: "{{ central_report_dir.path }}"
-        dest: "{{ report_dir }}/reports_{{ ansible_date_time.date }}.tar.gz"
-        format: gz
+        dest: "{{ report_dir }}\\reports_{{ ansible_date_time.date }}.zip"
+        format: zip
       delegate_to: localhost
       run_once: true
       register: report_archive
@@ -91,10 +79,7 @@
     - name: "Prepare email content"
       template:
         src: email_report.j2
-        dest: "/tmp/email_report_{{ ansible_date_time.iso8601 | replace(':', '-') }}.txt"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0600'
+        dest: "{{ report_dir }}\\email_report_{{ ansible_date_time.iso8601 | replace(':', '-') }}.txt"
       delegate_to: localhost
       run_once: true
       register: email_content
@@ -134,9 +119,9 @@
       loop: "{{ old_reports.files }}"
       when: old_reports.matched > 0
 
-    - name: "Clean empty directories"
-      shell: "find {{ report_dir }} -type d -empty -delete"
-      changed_when: false
+    - name: "Skip empty directory cleanup"
+      debug:
+        msg: "Skip cleaning empty directories to keep controller OS compatibility."
 
 - name: "Display reporting summary"
   debug:

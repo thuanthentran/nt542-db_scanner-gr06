@@ -1,0 +1,48 @@
+param(
+    [ValidateSet('audit','remediate','report','full')]
+    [string]$Mode = 'full'
+)
+
+$ErrorActionPreference = 'Stop'
+
+$AppHome = '{{ app_home }}'
+$VenvPython = '{{ venv_path }}\\Scripts\\python.exe'
+$LogDir = '{{ log_dir }}'
+$LogFile = Join-Path $LogDir 'scanner.log'
+
+function Write-Log {
+    param([string]$Message)
+    $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message"
+    Write-Output $line
+    Add-Content -Path $LogFile -Value $line
+}
+
+if (-not (Test-Path -Path $LogDir)) {
+    New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+}
+
+Write-Log "Starting DB Scanner"
+Write-Log "Python: $VenvPython"
+Write-Log "Mode: $Mode"
+
+switch ($Mode) {
+    'audit' {
+        & $VenvPython "$AppHome\\db_scan.py" --output-dir $LogDir --format json,html,csv --timeout {{ audit_timeout }} --log-level {{ log_level }}
+    }
+    'remediate' {
+        if ('{{ remediation_enabled }}' -ne 'True' -and '{{ remediation_enabled }}' -ne 'true') {
+            throw 'Remediation is disabled'
+        }
+        Write-Log 'Remediation mode placeholder - implement your logic here.'
+    }
+    'report' {
+        Write-Log 'Report generation placeholder - implement your logic here.'
+    }
+    default {
+        & $VenvPython "$AppHome\\db_scan.py" --output-dir $LogDir --format json,html,csv --full-scan --timeout {{ audit_timeout }}
+    }
+}
+
+$ExitCode = $LASTEXITCODE
+Write-Log "Completed with exit code: $ExitCode"
+exit $ExitCode

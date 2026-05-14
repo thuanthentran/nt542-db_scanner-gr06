@@ -4,21 +4,16 @@
 
 - name: "Deploy DB Scanner - Audit and Remediation"
   hosts: db_servers
-  remote_user: "{{ ansible_user | default('ansible') }}"
-  become: yes
-  become_method: sudo
+  gather_facts: true
+  remote_user: "{{ ansible_user | default('Administrator') }}"
   
   vars_files:
     - "vars/main.yml"
     - "vars/{{ environment | default('dev') }}.yml"
   
   pre_tasks:
-    - name: "Collect OS facts"
-      setup:
-        gather_subset: all
-
     - name: "Verify target hosts are reachable"
-      ping:
+      ansible.windows.win_ping:
 
   roles:
     - role: common

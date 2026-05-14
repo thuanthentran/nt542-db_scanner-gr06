@@ -1,23 +1,19 @@
 ---
 # Tasks thực hiện audit
 - name: "Create audit working directory"
-  file:
-    path: "{{ report_dir }}/audit_{{ ansible_date_time.iso8601 | replace(':', '-') }}"
+  ansible.windows.win_file:
+    path: "{{ report_dir }}\\audit_{{ ansible_date_time.iso8601 | replace(':', '-') }}"
     state: directory
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
   register: audit_dir
 - name: "Run full audit scan"
-  command:
+  ansible.windows.win_command:
     cmd: |
-      {{ venv_path }}/bin/python3 {{ app_home }}/db_scan.py
+      {{ venv_path }}\Scripts\python.exe {{ app_home }}\db_scan.py
       --output-dir {{ audit_dir.path }}
       --format json,html,csv
       --timeout {{ audit_timeout }}
       --log-level {{ log_level }}
-    creates: "{{ audit_dir.path }}/audit_results.json"
-  become_user: "{{ app_user }}"
+    creates: "{{ audit_dir.path }}\\audit_results.json"
   environment:
     PYTHONPATH: "{{ app_home }}"
     DB_SERVER: "{{ inventory_hostname }}"
@@ -32,13 +28,13 @@
     audit_results_path: "{{ audit_dir.path }}"
 
 - name: "Parse audit results"
-  stat:
-    path: "{{ audit_dir.path }}/audit_results.json"
+  ansible.windows.win_stat:
+    path: "{{ audit_dir.path }}\\audit_results.json"
   register: audit_results_file
 
 - name: "Read audit summary"
-  slurp:
-    src: "{{ audit_dir.path }}/audit_results.json"
+  ansible.windows.win_slurp:
+    src: "{{ audit_dir.path }}\\audit_results.json"
   register: audit_results_content
   when: audit_results_file.stat.exists
 
@@ -51,24 +47,21 @@
   when: audit_results_file.stat.exists
 
 - name: "Generate audit report"
-  template:
+  ansible.windows.win_template:
     src: audit_report.html.j2
-    dest: "{{ audit_dir.path }}/audit_report.html"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0644'
+    dest: "{{ audit_dir.path }}\\audit_report.html"
   vars:
     audit_timestamp: "{{ ansible_date_time.iso8601 }}"
     audit_hostname: "{{ inventory_hostname }}"
     audit_status_info: "{{ audit_status }}"
 
 - name: "Compress audit results"
-  archive:
-    path: "{{ audit_dir.path }}"
-    dest: "{{ audit_dir.path }}.tar.gz"
-    format: gz
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
+  ansible.windows.win_shell: |
+    $src = "{{ audit_dir.path }}"
+    $dst = "{{ audit_dir.path }}.zip"
+    if (Test-Path -Path $dst) { Remove-Item -Path $dst -Force }
+    Compress-Archive -Path $src -DestinationPath $dst -Force
+    Write-Output $dst
   register: audit_archive
 
 - name: "Create audit task summary"
@@ -78,5 +71,5 @@
       timestamp: "{{ ansible_date_time.iso8601 }}"
       server: "{{ inventory_hostname }}"
       results_path: "{{ audit_dir.path }}"
-      archive_path: "{{ audit_archive.dest }}"
+      archive_path: "{{ audit_dir.path }}.zip"
       findings: "{{ (audit_results_content.content | b64decode | from_json).findings | default(0) if audit_results_file.stat.exists else 'N/A' }}"

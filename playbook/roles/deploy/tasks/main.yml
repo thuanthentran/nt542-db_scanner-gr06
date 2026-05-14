@@ -1,85 +1,59 @@
 ---
 # Tasks triển khai ứng dụng
 - name: "Copy scanner application from control node"
-  copy:
+  ansible.windows.win_copy:
     src: "{{ source_path }}/"
-    dest: "{{ app_home }}/src"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
+    dest: "{{ app_home }}\\src"
   register: copy_result
 
 - name: "Create Python virtual environment"
-  command:
-    cmd: "python3 -m venv {{ venv_path }}"
-    creates: "{{ venv_path }}/bin/activate"
-  become_user: "{{ app_user }}"
+  ansible.windows.win_command: "python -m venv {{ venv_path }}"
+  args:
+    creates: "{{ venv_path }}\\Scripts\\activate.bat"
 
-- name: "Upgrade pip in virtualenv"
-  pip:
-    name:
-      - pip
-      - setuptools
-      - wheel
-    state: latest
-    virtualenv: "{{ venv_path }}"
-  become_user: "{{ app_user }}"
+- name: "Upgrade pip/setuptools/wheel in virtualenv"
+  ansible.windows.win_command: >-
+    {{ venv_path }}\\Scripts\\python.exe -m pip install --upgrade pip setuptools wheel
+  register: pip_bootstrap
+  changed_when: "'Requirement already satisfied' not in (pip_bootstrap.stdout | default(''))"
 
 - name: "Install Python dependencies"
-  pip:
-    requirements: "{{ app_home }}/src/requirements.txt"
-    virtualenv: "{{ venv_path }}"
-    state: present
-  become_user: "{{ app_user }}"
+  ansible.windows.win_command: >-
+    {{ venv_path }}\\Scripts\\python.exe -m pip install -r {{ app_home }}\\src\\requirements.txt
   register: pip_result
+  changed_when: "'Requirement already satisfied' not in (pip_result.stdout | default(''))"
 
 - name: "Copy main scanner script"
-  copy:
-    src: "{{ app_home }}/src/db_scan.py"
-    dest: "{{ app_home }}/db_scan.py"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
-  when: copy_result.changed or not db_scan_script_exists
+  ansible.windows.win_copy:
+    src: "{{ source_path }}/db_scan.py"
+    dest: "{{ app_home }}\\db_scan.py"
 
 - name: "Copy scanner modules"
-  copy:
-    src: "{{ app_home }}/src/scanner/"
-    dest: "{{ app_home }}/scanner/"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
-  when: copy_result.changed
+  ansible.windows.win_copy:
+    src: "{{ source_path }}/scanner/"
+    dest: "{{ app_home }}\\scanner\\"
 
 - name: "Create configuration file"
-  template:
+  ansible.windows.win_template:
     src: db_scanner_config.j2
-    dest: "{{ app_home }}/config.ini"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0600'
+    dest: "{{ app_home }}\\config.ini"
   vars:
     db_server: "{{ inventory_hostname }}"
     db_instance: "{{ db_instance | default('SQLEXPRESS') }}"
 
 - name: "Create wrapper script"
-  template:
-    src: run_scanner.sh.j2
-    dest: "{{ app_home }}/run_scanner.sh"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
+  ansible.windows.win_template:
+    src: run_scanner.ps1.j2
+    dest: "{{ app_home }}\\run_scanner.ps1"
 
 - name: "Verify deployment"
-  command:
-    cmd: "{{ venv_path }}/bin/python3 -m py_compile {{ app_home }}/db_scan.py"
-  become_user: "{{ app_user }}"
+  ansible.windows.win_command: "{{ venv_path }}\\Scripts\\python.exe -m py_compile {{ app_home }}\\db_scan.py"
   changed_when: false
 
 - name: "Set deployment status"
   set_fact:
     deployment_status: "SUCCESS"
-  when: pip_result.changed or git_result.changed
+  when: pip_result is succeeded and copy_result is succeeded
 
 - name: "Display deployment info"
   debug:
