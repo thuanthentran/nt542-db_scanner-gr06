@@ -27,8 +27,6 @@
       tags: ['deploy']
     - role: audit
       tags: ['audit']
-    - role: remediation
-      tags: ['remediation']
     - role: reporting
       tags: ['reporting']
 

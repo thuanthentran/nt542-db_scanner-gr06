@@ -1,12 +1,17 @@
 ---
 # Tasks triển khai ứng dụng
-- name: "Copy scanner application from control node"
+- name: "Copy application files while preserving directory structure"
   copy:
-    src: "{{ source_path }}/"
-    dest: "{{ app_home }}/src"
+    # Đảm bảo item "scanner" không có dấu gạch chéo ở cuối
+    src: "{{ playbook_dir }}/../{{ item }}"
+    dest: "{{ app_home }}/"
     owner: "{{ app_user }}"
     group: "{{ app_group }}"
     mode: '0755'
+  with_items:
+    - "db_scan.py"
+    - "requirements.txt"
+    - "scanner" # KHÔNG để "scanner/"
   register: copy_result
 
 - name: "Create Python virtual environment"
@@ -27,29 +32,11 @@
 
 - name: "Install Python dependencies"
   pip:
-    requirements: "{{ app_home }}/src/requirements.txt"
+    requirements: "{{ app_home }}/requirements.txt"
     virtualenv: "{{ venv_path }}"
     state: present
   become_user: "{{ app_user }}"
   register: pip_result
-
-- name: "Copy main scanner script"
-  copy:
-    src: "{{ app_home }}/src/db_scan.py"
-    dest: "{{ app_home }}/db_scan.py"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
-  when: copy_result.changed or not db_scan_script_exists
-
-- name: "Copy scanner modules"
-  copy:
-    src: "{{ app_home }}/src/scanner/"
-    dest: "{{ app_home }}/scanner/"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: '0755'
-  when: copy_result.changed
 
 - name: "Create configuration file"
   template:
@@ -60,7 +47,7 @@
     mode: '0600'
   vars:
     db_server: "{{ inventory_hostname }}"
-    db_instance: "{{ db_instance | default('SQLEXPRESS') }}"
+    db_instance: "MSSQLSERVER"
 
 - name: "Create wrapper script"
   template:
@@ -79,7 +66,7 @@
 - name: "Set deployment status"
   set_fact:
     deployment_status: "SUCCESS"
-  when: pip_result.changed or git_result.changed
+  when: (pip_result is defined and pip_result.changed) or (copy_result is defined and copy_result.changed)
 
 - name: "Display deployment info"
   debug:

@@ -3,3 +3,5 @@ mariadb-12.2.2-winx64.msi
 scanner/__pycache__/
 testing/
 .idea/
+playbook/roles/deploy/tasks/main.yml.save
+playbook/ansible-venv/

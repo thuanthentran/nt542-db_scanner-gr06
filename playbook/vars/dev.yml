@@ -13,3 +13,5 @@ db_hosts:
     credentials_vault: "vault_dev_db_user"
 
 monitoring_enabled: false
+# Thêm biến này vào
+central_report_dir: "/home/ubuntu/reports/db_scanner"

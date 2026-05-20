@@ -1,79 +1,151 @@
 ---
-# Tasks thu thập báo cáo từ nhiều máy
+# =========================================================
+# REPORTING ROLE
+# =========================================================
+
 - name: "Aggregate audit results from all servers"
   block:
+
+    # =====================================================
+    # CREATE CENTRAL REPORT DIRECTORY (LOCALHOST)
+    # =====================================================
+
     - name: "Create central report directory"
       file:
-        path: "{{ report_dir }}/aggregated_{{ ansible_date_time.date }}"
+        path: "{{ central_report_dir }}"
         state: directory
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
+        owner: "ubuntu"
+        group: "ubuntu"
         mode: '0755'
       delegate_to: localhost
       run_once: true
-      register: central_report_dir
 
-    - name: "Fetch audit results from all servers"
+    # =====================================================
+    # FIND LATEST AUDIT DIRECTORY ON REMOTE HOST
+    # =====================================================
+
+    - name: "Find the latest audit report directory"
+      find:
+        paths: "/var/reports/db_scanner"
+        patterns: "audit_*"
+        file_type: directory
+      register: found_reports
+
+    - name: "Select the most recent report directory"
+      set_fact:
+        latest_audit_dir: >-
+          {{
+            found_reports.files
+            | sort(attribute='mtime', reverse=true)
+            | first
+          }}
+      when: found_reports.matched > 0
+
+    - name: "Debug latest audit directory"
+      debug:
+        var: latest_audit_dir
+      when: latest_audit_dir is defined
+
+    # =====================================================
+    # CREATE ARCHIVE ON REMOTE HOST
+    # =====================================================
+
+    - name: "Archive audit results"
+      archive:
+        path: "{{ latest_audit_dir.path }}"
+        dest: "/opt/audit_results_{{ inventory_hostname }}.tar.gz"
+        format: gz
+      when: latest_audit_dir is defined
+
+    # =====================================================
+    # FETCH ARCHIVE TO LOCALHOST
+    # =====================================================
+
+    - name: "Fetch audit results as an archive"
+      become: true
       fetch:
-        src: "{{ audit_results_path }}"
-        dest: "{{ central_report_dir.path }}/{{ inventory_hostname }}/"
-        flat: no
-      ignore_errors: yes
-      when: audit_results_path is defined
+        src: "/opt/audit_results_{{ inventory_hostname }}.tar.gz"
+        dest: "{{ central_report_dir }}/{{ inventory_hostname }}/"
+        flat: yes
+      when: latest_audit_dir is defined
+
+    # =====================================================
+    # FETCH REMEDIATION REPORT
+    # =====================================================
 
     - name: "Fetch remediation results (if applicable)"
       fetch:
         src: "{{ remediation_summary.report_path }}"
-        dest: "{{ central_report_dir.path }}/remediation_{{ inventory_hostname }}/"
+        dest: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/"
         flat: no
       ignore_errors: yes
-      when: remediation_summary is defined and remediation_summary.report_path != 'N/A'
+      when:
+        - remediation_summary is defined
+        - remediation_summary.report_path != 'N/A'
+
+# =========================================================
+# GENERATE CONSOLIDATED REPORTS
+# =========================================================
 
 - name: "Generate consolidated report"
   block:
-    - name: "Create consolidated report template"
+
+    - name: "Create consolidated HTML report"
       template:
         src: consolidated_report.html.j2
-        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.html"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
+        dest: "{{ central_report_dir }}/CONSOLIDATED_REPORT.html"
+        owner: "ubuntu"
+        group: "ubuntu"
         mode: '0644'
       delegate_to: localhost
       run_once: true
-      vars:
-        report_timestamp: "{{ ansible_date_time.iso8601 }}"
-        total_servers: "{{ groups['db_servers'] | length }}"
-        servers_audited: "{{ groups['db_servers'] }}"
-        audit_summaries: "{{ hostvars | dict2items | map(attribute='value.audit_summary') | list }}"
 
-    - name: "Create CSV summary"
+    - name: "Create consolidated CSV report"
       template:
         src: consolidated_report.csv.j2
-        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.csv"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
+        dest: "{{ central_report_dir }}/CONSOLIDATED_REPORT.csv"
+        owner: "ubuntu"
+        group: "ubuntu"
         mode: '0644'
       delegate_to: localhost
       run_once: true
 
-    - name: "Create JSON summary"
+    - name: "Create consolidated JSON report"
       template:
         src: consolidated_report.json.j2
-        dest: "{{ central_report_dir.path }}/CONSOLIDATED_REPORT.json"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
+        dest: "{{ central_report_dir }}/CONSOLIDATED_REPORT.json"
+        owner: "ubuntu"
+        group: "ubuntu"
         mode: '0644'
       delegate_to: localhost
       run_once: true
 
+  # --- ĐƯA TOÀN BỘ VARS XUỐNG DƯỚI ĐÁY CỦA BLOCK ---
+  vars:
+    report_timestamp: "{{ ansible_facts['date_time']['iso8601'] }}"
+    total_servers: "{{ groups['db_servers'] | length }}"
+    servers_audited: "{{ groups['db_servers'] }}"
+    report_path: "{{ central_report_dir }}"
+    audit_summaries: >-
+      {{
+        hostvars
+        | dict2items
+        | map(attribute='value.audit_summary')
+        | list
+      }}
   when: audit_summary is defined
+
+# =========================================================
+# COMPRESS ALL REPORTS
+# =========================================================
 
 - name: "Compress all reports"
   block:
+
     - name: "Archive reports"
       archive:
-        path: "{{ central_report_dir.path }}"
-        dest: "{{ report_dir }}/reports_{{ ansible_date_time.date }}.tar.gz"
+        path: "{{ central_report_dir }}"
+        dest: "/tmp/consolidated_reports_{{ ansible_date_time.date }}.tar.gz"
         format: gz
       delegate_to: localhost
       run_once: true
@@ -86,45 +158,20 @@
       delegate_to: localhost
       register: archive_checksum
 
-- name: "Send reports via email"
-  block:
-    - name: "Prepare email content"
-      template:
-        src: email_report.j2
-        dest: "/tmp/email_report_{{ ansible_date_time.iso8601 | replace(':', '-') }}.txt"
-        owner: "{{ app_user }}"
-        group: "{{ app_group }}"
-        mode: '0600'
-      delegate_to: localhost
-      run_once: true
-      register: email_content
-      vars:
-        report_date: "{{ ansible_date_time.date }}"
-        report_path: "{{ central_report_dir.path }}"
 
-    - name: "Send email report"
-      mail:
-        host: "{{ smtp_server }}"
-        port: "{{ smtp_port }}"
-        to: "{{ email_recipients | join(',') }}"
-        subject: "DB Scanner Report - {{ ansible_date_time.date }}"
-        body: "{{ lookup('file', email_content.dest) }}"
-        subtype: html
-        attach: "{{ report_archive.dest }}"
-      delegate_to: localhost
-      run_once: true
-      when: send_report_email | bool
-
-  when: send_report_email | bool
+# =========================================================
+# CLEAN OLD REPORTS
+# =========================================================
 
 - name: "Clean up old reports"
   block:
+
     - name: "Find old reports"
       find:
-        path: "{{ report_dir }}"
+        paths: "{{ report_dir }}"
         age: "{{ report_retention_days }}d"
         recurse: yes
-        type: f
+        file_type: file
       register: old_reports
 
     - name: "Remove old reports"
@@ -138,10 +185,14 @@
       shell: "find {{ report_dir }} -type d -empty -delete"
       changed_when: false
 
+# =========================================================
+# DISPLAY SUMMARY
+# =========================================================
+
 - name: "Display reporting summary"
   debug:
     msg:
-      - "Report Location: {{ central_report_dir.path }}"
+      - "Report Location: {{ central_report_dir }}"
       - "Archive: {{ report_archive.dest | default('N/A') }}"
       - "Archive SHA256: {{ archive_checksum.stat.checksum | default('N/A') }}"
       - "Reports kept for: {{ report_retention_days }} days"
