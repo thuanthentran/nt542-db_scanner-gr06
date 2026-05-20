@@ -13,7 +13,7 @@
     - name: "Fetch audit results from all servers"
       fetch:
         src: "{{ audit_results_path }}"
-        dest: "{{ central_report_dir.path }}/{{ inventory_hostname }}/"
+        dest: "{{ hostvars['localhost']['central_report_dir']['path'] }}/{{ inventory_hostname }}/"
         flat: no
       ignore_errors: yes
       when: audit_results_path is defined
@@ -21,7 +21,7 @@
     - name: "Fetch remediation results (if applicable)"
       fetch:
         src: "{{ remediation_summary.report_path }}"
-        dest: "{{ central_report_dir.path }}/remediation_{{ inventory_hostname }}/"
+        dest: "{{ hostvars['localhost']['central_report_dir']['path'] }}/remediation_{{ inventory_hostname }}/"
         flat: no
       ignore_errors: yes
       when: remediation_summary is defined and remediation_summary.report_path != 'N/A'
@@ -31,7 +31,7 @@
     - name: "Create consolidated report template"
       template:
         src: consolidated_report.html.j2
-        dest: "{{ central_report_dir.path }}\\CONSOLIDATED_REPORT.html"
+        dest: "{{ hostvars['localhost']['central_report_dir']['path'] }}\\CONSOLIDATED_REPORT.html"
       delegate_to: localhost
       run_once: true
       vars:
@@ -43,14 +43,14 @@
     - name: "Create CSV summary"
       template:
         src: consolidated_report.csv.j2
-        dest: "{{ central_report_dir.path }}\\CONSOLIDATED_REPORT.csv"
+        dest: "{{ hostvars['localhost']['central_report_dir']['path'] }}\\CONSOLIDATED_REPORT.csv"
       delegate_to: localhost
       run_once: true
 
     - name: "Create JSON summary"
       template:
         src: consolidated_report.json.j2
-        dest: "{{ central_report_dir.path }}\\CONSOLIDATED_REPORT.json"
+        dest: "{{ hostvars['localhost']['central_report_dir']['path'] }}\\CONSOLIDATED_REPORT.json"
       delegate_to: localhost
       run_once: true
 
@@ -60,7 +60,7 @@
   block:
     - name: "Archive reports"
       archive:
-        path: "{{ central_report_dir.path }}"
+        path: "{{ hostvars['localhost']['central_report_dir']['path'] }}"
         dest: "{{ report_dir }}\\reports_{{ ansible_date_time.date }}.zip"
         format: zip
       delegate_to: localhost
@@ -85,7 +85,7 @@
       register: email_content
       vars:
         report_date: "{{ ansible_date_time.date }}"
-        report_path: "{{ central_report_dir.path }}"
+        report_path: "{{ hostvars['localhost']['central_report_dir']['path'] }}"
 
     - name: "Send email report"
       mail:
@@ -126,7 +126,7 @@
 - name: "Display reporting summary"
   debug:
     msg:
-      - "Report Location: {{ central_report_dir.path }}"
+      - "Report Location: {{ hostvars['localhost']['central_report_dir']['path'] }}"
       - "Archive: {{ report_archive.dest | default('N/A') }}"
       - "Archive SHA256: {{ archive_checksum.stat.checksum | default('N/A') }}"
       - "Reports kept for: {{ report_retention_days }} days"

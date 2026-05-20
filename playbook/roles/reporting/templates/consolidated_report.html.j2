@@ -106,7 +106,7 @@
             </div>
             <div class="card warning">
                 <h3>Issues Found</h3>
-                <div class="value">{{ audit_summaries | map(attribute='findings') | sum }}</div>
+                <div class="value">{{ audit_summaries | map(attribute='findings') | map('int') | sum }}</div>
             </div>
         </div>
 
@@ -193,7 +193,7 @@
 
         <div class="footer">
             <p><strong>Report Generated:</strong> {{ report_timestamp }}</p>
-            <p><strong>Next Scheduled Audit:</strong> {{ (ansible_date_time.day + 1) }}/{{ ansible_date_time.month }}/{{ ansible_date_time.year }}</p>
+            <p><strong>Next Scheduled Audit:</strong> {{ (ansible_facts['date_time']['day'] | int + 1) }}/{{ ansible_facts['date_time']['month'] }}/{{ ansible_facts['date_time']['year'] }}</p>
             <p>For detailed findings, please review individual server reports in the attached archive.</p>
         </div>
     </div>
