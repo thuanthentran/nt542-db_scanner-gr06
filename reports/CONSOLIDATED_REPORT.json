@@ -1,0 +1,23 @@
+{
+  "report_metadata": {
+    "generated": "2026-05-21T16:37:28Z",
+    "total_servers": 1,
+    "servers_audited": 1,
+    "environment": "[]"
+  },
+  "audit_results": [
+        {
+      "server": "dev-db-01",
+      "status": "SUCCESS",
+      "timestamp": "2026-05-21T16:37:28Z",
+      "findings": 0,
+      "results_path": "/var/reports/db_scanner/audit_2026-05-21T16-37-28Z",
+      "archive": "/var/reports/db_scanner/audit_2026-05-21T16-37-28Z.tar.gz"
+    }
+      ],
+  "summary": {
+    "total_findings": 0,
+    "successful_audits": 1,
+    "report_location": "/home/thuanthentran/project/nt542-db_scanner-gr06/playbook/../reports"
+  }
+}

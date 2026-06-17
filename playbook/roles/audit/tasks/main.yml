@@ -8,23 +8,47 @@
     group: "{{ app_group }}"
     mode: '0755'
   register: audit_dir
+
+- name: "Validate SQL Account configuration for audit"
+  assert:
+    that:
+      - audit_db_user is defined
+      - audit_db_password is defined
+      - (audit_db_user | length) > 0
+      - (audit_db_password | length) > 0
+    fail_msg: "audit_db_user/audit_db_password are required for audit SQL authentication. Provide them from vault or extra vars."
+  no_log: true
+
 - name: "Run full audit scan"
-  command:
-    cmd: |
-      {{ venv_path }}/bin/python3 {{ app_home }}/db_scan.py
-      --output-dir {{ audit_dir.path }}
-      --format json,html,csv
-      --timeout {{ audit_timeout }}
-      --log-level {{ log_level }}
-    creates: "{{ audit_dir.path }}/audit_results.json"
+  shell: |
+    set -o pipefail
+    {{ venv_path }}/bin/python3 {{ app_home }}/db_scan.py 2>&1 | tee {{ audit_dir.path }}/audit_results.log
+  args:
+    executable: /bin/bash
+    creates: "{{ audit_dir.path }}/audit_results.log"
   become_user: "{{ app_user }}"
   environment:
     PYTHONPATH: "{{ app_home }}"
-    DB_SERVER: "{{ inventory_hostname }}"
-    DB_INSTANCE: "{{ db_instance | default('SQLEXPRESS') }}"
+    DB_DRIVER: "{{ db_driver }}"
+    DB_SERVER: "{{ db_server | default(ansible_host | default(inventory_hostname)) }}"
+    DB_PORT: "{{ db_port | string }}"
+    DB_NAME: "{{ db_name }}"
+    DB_USER: "{{ audit_db_user }}"
+    DB_PASSWORD: "{{ audit_db_password }}"
+    DB_ENCRYPT: "{{ 'yes' if db_encrypt else 'no' }}"
+    DB_TRUST_SERVER_CERTIFICATE: "{{ 'yes' if db_trust_server_certificate else 'no' }}"
+    DB_LOGIN_TIMEOUT: "{{ db_login_timeout | string }}"
   register: audit_execution
-  timeout: "{{ audit_timeout + 60 }}"
-  ignore_errors: yes
+  timeout: 3600
+
+- name: "Store audit JSON output"
+  copy:
+    content: "{{ audit_execution.stdout }}"
+    dest: "{{ audit_dir.path }}/audit_results.json"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0644'
+  when: audit_execution.stdout is defined
 
 - name: "Set audit status"
   set_fact:

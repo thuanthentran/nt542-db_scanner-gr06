@@ -120,10 +120,36 @@ run_remediation() {
     fi
 }
 
+# Run rollback
+run_rollback() {
+    local environment=${1:-dev}
+    log_warning "Rollback will revert database configurations using the generated rollback script!"
+    read -p "Are you sure? (yes/no): " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        log_info "Rollback cancelled"
+        return 0
+    fi
+
+    log_info "Running rollback for $environment environment..."
+
+    ansible-playbook "$PLAYBOOK_DIR/rollback.yml" \
+        -i "$INVENTORY" \
+        -e "environment=$environment" \
+        2>&1 | tee -a "$LOG_DIR/playbook_$TIMESTAMP.log"
+
+    if [ $? -eq 0 ]; then
+        log_success "Rollback completed"
+    else
+        log_error "Rollback failed"
+        return 1
+    fi
+}
+
 # Run full scan
 run_full() {
     local environment=${1:-dev}
-    log_info "Running full scan for $environment environment..."
+    log_info "Running deploy + audit + reporting for $environment environment..."
     
     ansible-playbook "$PLAYBOOK_DIR/site.yml" \
         -i "$INVENTORY" \
@@ -161,7 +187,8 @@ Commands:
   deploy [env]         Deploy scanner to environment (default: dev)
   audit [env]          Run audit only (default: prod)
   remediate [env]      Run remediation (default: dev)
-  full [env]           Run full scan - deploy + audit + remediate
+    rollback [env]       Run rollback from generated rollback script (default: dev)
+    full [env]           Run deploy + audit + reporting
   list                 List all available hosts
   test                 Test connectivity to all hosts
   help                 Show this help message
@@ -175,6 +202,7 @@ Examples:
   $0 deploy prod
   $0 audit prod
   $0 remediate dev
+    $0 rollback dev
   $0 full staging
   $0 test
 
@@ -195,6 +223,9 @@ main() {
             ;;
         remediate)
             run_remediation "${2:-dev}"
+            ;;
+        rollback)
+            run_rollback "${2:-dev}"
             ;;
         full)
             run_full "${2:-dev}"

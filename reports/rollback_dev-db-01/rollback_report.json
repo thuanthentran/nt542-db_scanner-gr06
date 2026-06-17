@@ -1,0 +1,5 @@
+{
+    "status": "Success",
+    "rollback_sql_path": "/var/backups/db_scanner/2026-05-21/rollback_script.sql",
+    "executed_commands": 3
+}

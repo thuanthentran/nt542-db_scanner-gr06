@@ -61,14 +61,55 @@ ansible-playbook playbook/site.yml -i playbook/inventory/hosts.ini \
 ansible-playbook playbook/audit-only.yml -i playbook/inventory/hosts.ini \
   -e environment=prod
 
+# Chỉ rollback (rollback only)
+ansible-playbook playbook/rollback.yml -i playbook/inventory/inventory.ini \
+  -e environment=dev \
+  -e rollback_db_user=remediation_login \
+  -e rollback_db_password='YOUR_PASSWORD'
+
 # Chỉ remediate (remediation only)
-ansible-playbook playbook/remediate.yml -i playbook/inventory/hosts.ini \
-  -e environment=dev -e skip_remediation_prompt=true
+ansible-playbook playbook/remediate.yml -i playbook/inventory/inventory.ini \
+  -e environment=dev \
+  -e remediation_db_user=remediation_login \
+  -e remediation_db_password='YOUR_PASSWORD' \
+  -e audit_results_path=/var/reports/db_scanner/audit_YYYY-MM-DDTHH-MM-SSZ
+
+# Nếu không truyền audit_results_path, playbook sẽ tự lấy audit_results.json mới nhất trên host đích
 
 # Chỉ report (reporting only)
 ansible-playbook playbook/site.yml -i playbook/inventory/hosts.ini \
   -e environment=prod --tags=reporting
 ```
+
+### Rollback để quay lại trạng thái trước remediation
+
+Nếu bạn muốn chạy lại demo audit/remediation từ đầu, hãy kết nối bằng `remediation_login` hoặc một tài khoản sysadmin rồi chạy các câu lệnh SQL sau trên SQL Server:
+
+```sql
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
+
+EXEC sp_configure 'remote access', 1;
+RECONFIGURE;
+
+ALTER LOGIN sa ENABLE;
+ALTER LOGIN [sa] WITH CHECK_EXPIRATION = OFF;
+ALTER LOGIN [remediation_login] WITH CHECK_EXPIRATION = OFF;
+```
+
+Ví dụ dùng `sqlcmd`:
+
+```bash
+sqlcmd -S 192.168.142.164,1433 -U remediation_login -P 'YOUR_REMEDIATION_PASSWORD' -d master -C
+```
+
+Sau đó bạn có thể dán block SQL ở trên vào session `sqlcmd`, hoặc lưu thành file `rollback.sql` rồi chạy:
+
+```bash
+sqlcmd -S 192.168.142.164,1433 -U remediation_login -P 'YOUR_REMEDIATION_PASSWORD' -d master -C -i rollback.sql
+```
+
+Nếu `sa` đã bị disable và bạn không còn tài khoản sysadmin khác, hãy dùng Dedicated Admin Connection (DAC) ở cổng `1434` để mở lại quyền quản trị trước khi rollback tiếp.
 
 ### Chạy trên một server cụ thể
 
@@ -135,7 +176,10 @@ scp -r ansible@db-server-01:/var/reports/db_scanner/aggregated_* ./local_reports
 ansible-vault create playbook/vars/vault.yml
 
 # Thêm credentials của bạn vào vault:
-# db_user_password: "your_secure_password"
+# audit_db_user: "your_audit_login"
+# audit_db_password: "your_audit_secure_password"
+# remediation_db_user: "your_remediation_login"
+# remediation_db_password: "your_remediation_secure_password"
 # email_password: "your_email_password"
 
 # Chạy playbook với vault

@@ -41,4 +41,26 @@ smtp_port: 587
 # Cấu hình database
 db_connection_timeout: 30
 db_query_timeout: 300
-central_report_dir: "/home/ubuntu/reports/db_scanner"
+central_report_dir: "{{ source_path }}/reports"
+db_driver: "ODBC Driver 17 for SQL Server"
+db_server: "{{ ansible_host | default(inventory_hostname) }}"
+db_port: 1433
+db_name: "master"
+db_encrypt: true
+db_trust_server_certificate: true
+db_login_timeout: 30
+
+# Cấu hình rollback
+rollback_db_user: "{{ remediation_db_user }}"
+rollback_db_password: "{{ remediation_db_password }}"
+rollback_script_source: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/rollback_script.sql"
+rollback_local_dir: "{{ central_report_dir }}/rollback_{{ inventory_hostname }}"
+rollback_remote_dir: "{{ backup_dir }}/{{ ansible_date_time.date }}"
+rollback_remote_script_path: "{{ backup_dir }}/{{ ansible_date_time.date }}/rollback_script.sql"
+rollback_remote_report_path: "{{ backup_dir }}/{{ ansible_date_time.date }}/rollback_report.json"
+
+# Credential sets
+audit_db_user: ""
+audit_db_password: ""
+remediation_db_user: ""
+remediation_db_password: ""

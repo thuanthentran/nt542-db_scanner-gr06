@@ -1,0 +1,2 @@
+Server,Status,Timestamp,Findings,Results_Path
+"dev-db-01","SUCCESS","2026-05-21T16:37:28Z","0","/var/reports/db_scanner/audit_2026-05-21T16-37-28Z"

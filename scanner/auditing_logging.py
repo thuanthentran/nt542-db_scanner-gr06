@@ -31,11 +31,18 @@ def scan_auditing_logging(cursor):
         })
 
     # Rule 5.3: Ensure 'Login Auditing' is set to 'failed logins'
-    cursor.execute("EXEC xp_loginconfig 'audit level';")
+    query_5_3 = """
+    SELECT TOP 1 TRY_CAST(value_data AS int) AS audit_level
+    FROM sys.dm_server_registry
+    WHERE value_name IN ('AuditLevel', 'LoginAuditMode', 'LoginAudit')
+       OR value_name LIKE '%Audit%'
+    ORDER BY CASE value_name WHEN 'AuditLevel' THEN 0 WHEN 'LoginAuditMode' THEN 1 WHEN 'LoginAudit' THEN 2 ELSE 3 END;
+    """
+    cursor.execute(query_5_3)
     row = cursor.fetchone()
     if row:
-        audit_level = str(row[1])
-        status = "Compliance" if audit_level.lower() in ['failure', 'all'] else "Violate"
+        audit_level = int(row[0])
+        status = "Compliance" if audit_level in (2, 3) else "Violate"
         results.append({
             "group": "Auditing and Logging", "rule_id": "5.3",
             "policy": "Ensure 'Login Auditing' is set to 'failed logins'",

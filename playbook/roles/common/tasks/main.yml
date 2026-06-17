@@ -20,10 +20,15 @@
   register: packages_installed
   changed_when: packages_installed.changed
 
+- name: "Create application group"
+  group:
+    name: "{{ app_group }}"
+    state: present
+
 - name: "Create application user"
   user:
-    name: "{{ app_user }}"
     group: "{{ app_group }}"
+    name: "{{ app_user }}"
     groups: "{{ app_group }},sudo"
     home: "{{ app_home }}"
     shell: /bin/bash
@@ -49,3 +54,25 @@
     owner: root
     group: root
     mode: '0644'
+
+- name: "Add Microsoft GPG key"
+  ansible.builtin.apt_key:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    state: present
+
+- name: "Add Microsoft APT repository (Ubuntu 24.04)"
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64,armhf,arm64] https://packages.microsoft.com/ubuntu/24.04/prod noble main"
+    state: present
+    filename: mssql-release
+
+- name: "Install Microsoft ODBC Driver and unixODBC dependencies"
+  ansible.builtin.apt:
+    name:
+      - msodbcsql17
+      - unixodbc
+      - unixodbc-dev
+    state: present
+    update_cache: yes
+  environment:
+    ACCEPT_EULA: 'Y'

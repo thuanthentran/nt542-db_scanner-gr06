@@ -10,8 +10,11 @@
     mode: '0755'
   with_items:
     - "db_scan.py"
+    - "remediate.py"
+    - "rollback.py"
     - "requirements.txt"
     - "scanner" # KHÔNG để "scanner/"
+    - "remediator"
   register: copy_result
 
 - name: "Create Python virtual environment"
@@ -46,8 +49,8 @@
     group: "{{ app_group }}"
     mode: '0600'
   vars:
-    db_server: "{{ inventory_hostname }}"
-    db_instance: "MSSQLSERVER"
+    db_server: "{{ ansible_host | default(inventory_hostname) }}"
+    db_instance: "{{ hostvars[inventory_hostname].db_instance | default('MSSQLSERVER') }}"
 
 - name: "Create wrapper script"
   template:
@@ -59,7 +62,7 @@
 
 - name: "Verify deployment"
   command:
-    cmd: "{{ venv_path }}/bin/python3 -m py_compile {{ app_home }}/db_scan.py"
+    cmd: "{{ venv_path }}/bin/python3 -m py_compile {{ app_home }}/db_scan.py {{ app_home }}/remediate.py {{ app_home }}/rollback.py"
   become_user: "{{ app_user }}"
   changed_when: false
 

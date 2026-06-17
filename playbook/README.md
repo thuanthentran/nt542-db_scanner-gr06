@@ -276,12 +276,14 @@ ansible-playbook playbook/site.yml \
   --limit db-server-01
 ```
 
-### 4. Rollback thay đổi từ một ngày cụ thể
+### 4. Rollback thay đổi từ file rollback do remediation sinh ra
 
 ```bash
 ansible-playbook playbook/rollback.yml \
   -i playbook/inventory/hosts.ini \
-  -e "backup_date=2026-05-14"
+  -e "environment=dev" \
+  -e "rollback_db_user=remediation_login" \
+  -e "rollback_db_password=YOUR_REMEDIATION_PASSWORD"
 ```
 
 ## 🛠️ Troubleshooting

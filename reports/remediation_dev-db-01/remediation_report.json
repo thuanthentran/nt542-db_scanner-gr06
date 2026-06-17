@@ -1,0 +1,38 @@
+[
+    {
+        "rule_id": "2.12",
+        "action": "Manual",
+        "status": "Requires DBA",
+        "details": "Rule này yêu cầu can thiệp thủ công hoặc khai báo tham số động."
+    },
+    {
+        "rule_id": "2.13",
+        "action": "Auto-Remediate",
+        "status": "Success",
+        "details": "Đã vô hiệu hóa tài khoản sa"
+    },
+    {
+        "rule_id": "2.14",
+        "action": "Manual",
+        "status": "Requires DBA",
+        "details": "Rule này yêu cầu can thiệp thủ công hoặc khai báo tham số động."
+    },
+    {
+        "rule_id": "2.16",
+        "action": "Manual",
+        "status": "Requires DBA",
+        "details": "Rule này yêu cầu can thiệp thủ công hoặc khai báo tham số động."
+    },
+    {
+        "rule_id": "3.1",
+        "action": "Manual",
+        "status": "Requires DBA",
+        "details": "Rule này yêu cầu can thiệp thủ công hoặc khai báo tham số động."
+    },
+    {
+        "rule_id": "4.2",
+        "action": "Auto-Remediate",
+        "status": "Success",
+        "details": "Đã bật CHECK_EXPIRATION cho: ['sa', 'remediation_login']"
+    }
+]

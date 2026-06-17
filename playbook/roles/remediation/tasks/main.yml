@@ -1,0 +1,131 @@
+---
+# Tasks xử lý tự động khắc phục cấu hình vi phạm
+
+- name: "Check if remediation is enabled"
+  meta: end_host
+  when: not remediation_enabled
+
+- name: "Ensure backup directory exists on remote host"
+  file:
+    path: "{{ backup_dir }}/{{ ansible_date_time.date }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0755'
+
+- name: "Validate SQL Account configuration for remediation"
+  assert:
+    that:
+      - remediation_db_user is defined
+      - remediation_db_password is defined
+      - (remediation_db_user | length) > 0
+      - (remediation_db_password | length) > 0
+    fail_msg: "remediation_db_user/remediation_db_password are required for remediation SQL authentication. Provide them from vault or extra vars."
+  no_log: true
+
+- name: "Resolve audit results path"
+  block:
+    - name: "Normalize provided audit results path"
+      set_fact:
+        audit_results_path: "{{ audit_results_path | regex_replace('/audit_results\\.json$', '') }}"
+      when: audit_results_path is defined and (audit_results_path | length) > 0
+
+    - name: "Find latest audit results when path is not provided"
+      find:
+        paths: "{{ report_dir }}"
+        patterns: "audit_results.json"
+        file_type: file
+        recurse: yes
+      register: audit_results_candidates
+      when: audit_results_path is not defined or (audit_results_path | length) == 0
+
+    - name: "Set audit results path from latest audit run"
+      set_fact:
+        audit_results_path: "{{ (audit_results_candidates.files | sort(attribute='mtime') | last).path | regex_replace('/audit_results\\.json$', '') }}"
+      when:
+        - audit_results_candidates is defined
+        - (audit_results_candidates.matched | default(0) | int) > 0
+
+- name: "Check resolved audit results file"
+  stat:
+    path: "{{ audit_results_path }}/audit_results.json"
+  register: resolved_audit_results_file
+
+- name: "Ensure audit results were found"
+  assert:
+    that:
+      - resolved_audit_results_file.stat.exists
+    fail_msg: "No audit_results.json found. Provide audit_results_path explicitly or run audit first."
+
+- name: "Execute Python Remediation Script"
+  command:
+    cmd: >
+      {{ venv_path }}/bin/python3 {{ app_home }}/remediate.py
+      {{ audit_results_path }}/audit_results.json
+      {{ backup_dir }}/{{ ansible_date_time.date }}/rollback_script.sql
+  become_user: "{{ app_user }}"
+  environment:
+    PYTHONPATH: "{{ app_home }}"
+    DB_DRIVER: "{{ db_driver }}"
+    DB_SERVER: "{{ db_server | default(ansible_host | default(inventory_hostname)) }}"
+    DB_PORT: "{{ db_port | string }}"
+    DB_NAME: "{{ db_name }}"
+    DB_USER: "{{ remediation_db_user }}"
+    DB_PASSWORD: "{{ remediation_db_password }}"
+    DB_ENCRYPT: "{{ 'yes' if db_encrypt else 'no' }}"
+    DB_TRUST_SERVER_CERTIFICATE: "{{ 'yes' if db_trust_server_certificate else 'no' }}"
+    DB_LOGIN_TIMEOUT: "{{ db_login_timeout | string }}"
+  register: remediation_exec
+  no_log: true
+
+- name: "Store remediation report"
+  copy:
+    content: "{{ remediation_exec.stdout | default('[]') }}"
+    dest: "{{ backup_dir }}/{{ ansible_date_time.date }}/remediation_report.json"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: '0644'
+  when: remediation_exec.stdout is defined
+
+- name: "Set remediation summary"
+  set_fact:
+    remediation_summary:
+      status: "SUCCESS"
+      report_path: "{{ backup_dir }}/{{ ansible_date_time.date }}/remediation_report.json"
+      rollback_path: "{{ backup_dir }}/{{ ansible_date_time.date }}/rollback_script.sql"
+
+- name: "Create local remediation report directory"
+  file:
+    path: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}"
+    state: directory
+    owner: "{{ lookup('env','USER') | default('ubuntu') }}"
+    group: "{{ lookup('env','USER') | default('ubuntu') }}"
+    mode: '0755'
+  delegate_to: localhost
+
+- name: "Fetch remediation report to localhost"
+  fetch:
+    src: "{{ backup_dir }}/{{ ansible_date_time.date }}/remediation_report.json"
+    dest: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/"
+    flat: yes
+
+- name: "Update remediation summary with local report path"
+  set_fact:
+    remediation_summary:
+      status: "SUCCESS"
+      report_path: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/remediation_report.json"
+      rollback_path: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/rollback_script.sql"
+
+- name: "Expose remediation report path for playbook summary"
+  set_fact:
+    remediation_report_path: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/remediation_report.json"
+
+- name: "Expose remediation rollback path for playbook summary"
+  set_fact:
+    remediation_rollback_path: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/rollback_script.sql"
+
+- name: "Fetch Rollback SQL script to localhost for safekeeping"
+  fetch:
+    src: "{{ backup_dir }}/{{ ansible_date_time.date }}/rollback_script.sql"
+    dest: "{{ central_report_dir }}/remediation_{{ inventory_hostname }}/"
+    flat: yes

@@ -1,50 +1,36 @@
 ---
-# Playbook để rollback các thay đổi từ remediation
-# Sử dụng: ansible-playbook playbook/rollback.yml -i inventory/hosts.ini -e backup_date=2026-05-14
+# Playbook riêng để rollback từ rollback_script.sql do remediation sinh ra
+# Sử dụng: ansible-playbook playbook/rollback.yml -i playbook/inventory/inventory.ini -e environment=dev
 
-- name: "Rollback Remediation Changes"
+- name: "Run Rollback Only"
   hosts: db_servers
   remote_user: "{{ ansible_user | default('ansible') }}"
   become: yes
-  
+  become_method: sudo
+
   vars_files:
-    - vars/main.yml
-    - vars/{{ environment | default('dev') }}.yml
-  
-  tasks:
-    - name: "Verify backup exists"
-      stat:
-        path: "{{ backup_dir }}/{{ backup_date }}"
-      register: backup_stat
-      failed_when: not backup_stat.stat.exists
+    - "vars/main.yml"
+    - "vars/{{ environment | default('dev') }}.yml"
 
-    - name: "Confirm rollback"
-      pause:
-        prompt: |
-          
-          ⚠️  ROLLBACK WARNING: You are about to restore database configuration from a backup!
-          
-          Server: {{ inventory_hostname }}
-          Backup Date: {{ backup_date }}
-          Backup Location: {{ backup_dir }}/{{ backup_date }}
-          
-          This will UNDO all remediation changes since {{ backup_date }}.
-          Type 'yes' to proceed:
-        echo: yes
-      register: rollback_confirm
+  pre_tasks:
+    - name: "Collect OS facts"
+      setup:
+        gather_subset: all
 
-    - name: "Restore from backup"
-      shell: |
-        echo "Restoring configuration from backup..."
-        # Add your restoration logic here
-        ls -la {{ backup_dir }}/{{ backup_date }}/
-        echo "Restoration completed"
-      register: rollback_result
-      become_user: "{{ app_user }}"
+    - name: "Verify target hosts are reachable"
+      ping:
 
-    - name: "Verify restoration"
+  roles:
+    - role: common
+      tags: ['always']
+    - role: deploy
+      tags: ['deploy']
+    - role: rollback
+      tags: ['rollback']
+
+  post_tasks:
+    - name: "Display summary"
       debug:
         msg:
-          - "Rollback Status: SUCCESS"
-          - "Backup Used: {{ backup_dir }}/{{ backup_date }}"
-          - "Restored At: {{ ansible_date_time.iso8601 }}"
+          - "Deployment Status: {{ deployment_status | default('completed') }}"
+          - "Rollback Report: {{ rollback_report_path | default('N/A') }}"
